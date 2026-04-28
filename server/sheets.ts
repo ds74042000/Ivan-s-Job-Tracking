@@ -3,7 +3,7 @@ import type { Job, Payment } from "@shared/schema";
 
 const SPREADSHEET_ID = "1m3plr0n_YAAFldaWIa2wmBeY_pqSxtSP7ZzbVrNne10";
 
-function callTool(toolName: string, args: Record<string, unknown>) {
+function callTool(toolName: string, args: Record<string, unknown>): any {
   try {
     const params = JSON.stringify({
       source_id: "google_sheets__pipedream",
@@ -16,7 +16,7 @@ function callTool(toolName: string, args: Record<string, unknown>) {
     }).toString();
     return JSON.parse(result);
   } catch (err) {
-    console.error("[Sheets sync error]", err);
+    console.error("[Sheets error]", err);
     return null;
   }
 }
@@ -84,45 +84,36 @@ export async function sheetsSyncAllPayments(payments: Payment[]) {
 }
 
 // ── Startup restore ───────────────────────────────────────────────────────────
-// Called once on boot. Reads both sheets and re-seeds local SQLite so data
-// survives Render restarts (free tier has no persistent disk).
+// Reads both sheets and re-seeds local SQLite so data survives Render restarts.
+// Imported and called from server/index.ts BEFORE routes are registered.
 
-export function sheetsRestoreToDb() {
+export function sheetsRestoreToDb(sqlite: import("better-sqlite3").Database) {
   try {
-    console.log("[Sheets restore] Reading from Google Sheets...");
-
-    const jobsResult = callTool("google_sheets-read-rows", {
+    console.log("[Restore] Reading jobs from Google Sheets...");
+    const jobsRes = callTool("google_sheets-read-rows", {
       spreadsheetId: SPREADSHEET_ID,
       sheetName: "Jobs",
+      hasHeaders: true,
     });
 
-    const paymentsResult = callTool("google_sheets-read-rows", {
+    console.log("[Restore] Reading payments from Google Sheets...");
+    const paymentsRes = callTool("google_sheets-read-rows", {
       spreadsheetId: SPREADSHEET_ID,
       sheetName: "Payments",
+      hasHeaders: true,
     });
 
-    // Use the raw sqlite instance for INSERT OR REPLACE with explicit IDs
-    const { sqlite } = require("./storage");
-
-    // Parse rows — handle both direct array and wrapped response
-    function parseRows(result: any): any[] {
-      if (!result) return [];
-      const raw = typeof result === "string" ? JSON.parse(result) : result;
-      if (Array.isArray(raw)) return raw;
-      return raw?.rows ?? raw?.data ?? raw?.values ?? [];
-    }
-
-    const jobRows = parseRows(jobsResult);
-    const paymentRows = parseRows(paymentsResult);
+    // Response shape: { headers: [...], rows: [...], rowCount: N }
+    const jobRows: any[] = jobsRes?.rows ?? [];
+    const paymentRows: any[] = paymentsRes?.rows ?? [];
 
     if (jobRows.length === 0 && paymentRows.length === 0) {
-      console.log("[Sheets restore] Sheets are empty — starting fresh.");
+      console.log("[Restore] Sheets are empty — nothing to restore.");
       return;
     }
 
-    console.log(`[Sheets restore] Restoring ${jobRows.length} jobs, ${paymentRows.length} payments...`);
+    console.log(`[Restore] Restoring ${jobRows.length} jobs, ${paymentRows.length} payments...`);
 
-    // Prepare statements for fast bulk insert
     const insertJob = sqlite.prepare(`
       INSERT OR REPLACE INTO jobs (
         id, job_number, customer_name, service_type, job_date, week_of,
@@ -140,55 +131,45 @@ export function sheetsRestoreToDb() {
       VALUES (@id, @weekOf, @payDate, @amountPaid, @notes)
     `);
 
-    // Run all inserts in a transaction for speed
     const restoreAll = sqlite.transaction(() => {
       for (const row of jobRows) {
-        const id = parseInt(row["ID"] ?? row[0]);
+        const id = parseInt(row["ID"]);
         if (!id || isNaN(id)) continue;
-        try {
-          insertJob.run({
-            id,
-            jobNumber: String(row["Job Number"] ?? row[1] ?? ""),
-            customerName: String(row["Customer Name"] ?? row[2] ?? ""),
-            serviceType: String(row["Service Type"] ?? row[3] ?? "Plumbing"),
-            jobDate: String(row["Job Date"] ?? row[4] ?? ""),
-            weekOf: String(row["Week Of"] ?? row[5] ?? ""),
-            invoiceTotal: parseFloat(row["Invoice Total"] ?? row[6] ?? 0) || 0,
-            materialCost: parseFloat(row["Material Cost"] ?? row[7] ?? 0) || 0,
-            materialMarkupRate: parseFloat(row["Material Markup Rate"] ?? row[8] ?? 0.30) || 0.30,
-            materialMarkupAmount: parseFloat(row["Material Markup Amount"] ?? row[9] ?? 0) || 0,
-            commissionableAmount: parseFloat(row["Commissionable Amount"] ?? row[10] ?? 0) || 0,
-            commissionRate: parseFloat(row["Commission Rate"] ?? row[11] ?? 0.25) || 0.25,
-            commissionEarned: parseFloat(row["Commission Earned"] ?? row[12] ?? 0) || 0,
-            status: String(row["Status"] ?? row[13] ?? "completed"),
-            notes: String(row["Notes"] ?? row[14] ?? ""),
-          });
-        } catch (e) {
-          console.error("[Sheets restore] Job row failed:", row, e);
-        }
+        insertJob.run({
+          id,
+          jobNumber:            String(row["Job Number"]          ?? ""),
+          customerName:         String(row["Customer Name"]       ?? ""),
+          serviceType:          String(row["Service Type"]        ?? "Plumbing"),
+          jobDate:              String(row["Job Date"]            ?? ""),
+          weekOf:               String(row["Week Of"]             ?? ""),
+          invoiceTotal:         parseFloat(row["Invoice Total"]   ?? 0) || 0,
+          materialCost:         parseFloat(row["Material Cost"]   ?? 0) || 0,
+          materialMarkupRate:   parseFloat(row["Material Markup Rate"]   ?? 0.30) || 0.30,
+          materialMarkupAmount: parseFloat(row["Material Markup Amount"] ?? 0) || 0,
+          commissionableAmount: parseFloat(row["Commissionable Amount"]  ?? 0) || 0,
+          commissionRate:       parseFloat(row["Commission Rate"] ?? 0.25) || 0.25,
+          commissionEarned:     parseFloat(row["Commission Earned"] ?? 0) || 0,
+          status:               String(row["Status"]              ?? "completed"),
+          notes:                String(row["Notes"]               ?? ""),
+        });
       }
 
       for (const row of paymentRows) {
-        const id = parseInt(row["ID"] ?? row[0]);
+        const id = parseInt(row["ID"]);
         if (!id || isNaN(id)) continue;
-        try {
-          insertPayment.run({
-            id,
-            weekOf: String(row["Week Of"] ?? row[1] ?? ""),
-            payDate: String(row["Pay Date"] ?? row[2] ?? ""),
-            amountPaid: parseFloat(row["Amount Paid"] ?? row[3] ?? 0) || 0,
-            notes: String(row["Notes"] ?? row[4] ?? ""),
-          });
-        } catch (e) {
-          console.error("[Sheets restore] Payment row failed:", row, e);
-        }
+        insertPayment.run({
+          id,
+          weekOf:     String(row["Week Of"]      ?? ""),
+          payDate:    String(row["Pay Date"]      ?? ""),
+          amountPaid: parseFloat(row["Amount Paid"] ?? 0) || 0,
+          notes:      String(row["Notes"]         ?? ""),
+        });
       }
     });
 
     restoreAll();
-    console.log("[Sheets restore] Done.");
+    console.log("[Restore] Done.");
   } catch (err) {
-    console.error("[Sheets restore] Error:", err);
-    // Never crash the server on restore failure
+    console.error("[Restore] Error:", err);
   }
 }
