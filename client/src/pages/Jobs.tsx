@@ -6,40 +6,30 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema, type Job, type InsertJob } from "@shared/schema";
 import { z } from "zod";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Briefcase } from "lucide-react";
+import { Plus, Pencil, Trash2, Briefcase, HardHat } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const formSchema = insertJobSchema.extend({
-  invoiceTotal: z.coerce.number().min(0, "Must be positive"),
+  invoiceTotal: z.coerce.number().min(0),
+  materialCost: z.coerce.number().min(0),
   commissionRate: z.coerce.number().min(0).max(1),
+  materialMarkupRate: z.coerce.number().min(0).max(1),
 });
 
 function fmt(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
-// Get Monday of the week for a given date
 function getMondayOf(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   const day = d.getDay();
@@ -50,11 +40,7 @@ function getMondayOf(dateStr: string): string {
 
 const SERVICE_TYPES = ["Plumbing", "Drain Cleaning", "Water Heater", "HVAC", "Sewer", "Repipe", "Leak Repair", "Other"];
 
-function JobForm({
-  defaultValues,
-  onSubmit,
-  isPending,
-}: {
+function JobForm({ defaultValues, onSubmit, isPending }: {
   defaultValues?: Partial<InsertJob>;
   onSubmit: (data: InsertJob) => void;
   isPending: boolean;
@@ -67,6 +53,10 @@ function JobForm({
       serviceType: "Plumbing",
       jobDate: new Date().toISOString().split("T")[0],
       invoiceTotal: 0,
+      materialCost: 0,
+      materialMarkupRate: 0.30,
+      materialMarkupAmount: 0,
+      commissionableAmount: 0,
       commissionRate: 0.25,
       commissionEarned: 0,
       status: "completed",
@@ -76,14 +66,22 @@ function JobForm({
     },
   });
 
-  const watchDate = form.watch("jobDate");
-  const watchTotal = form.watch("invoiceTotal");
-  const watchRate = form.watch("commissionRate");
-  const estimatedCommission = (Number(watchTotal) || 0) * (Number(watchRate) || 0.25);
+  const invoiceTotal = Number(form.watch("invoiceTotal")) || 0;
+  const materialCost = Number(form.watch("materialCost")) || 0;
+  const materialMarkupRate = Number(form.watch("materialMarkupRate")) || 0.30;
+  const commissionRate = Number(form.watch("commissionRate")) || 0.25;
+
+  // Cost + 30% markup = full amount deducted from commissionable base
+  const materialMarkupAmount = materialCost * (1 + materialMarkupRate);
+  const commissionableAmount = Math.max(0, invoiceTotal - materialMarkupAmount);
+  const commissionEarned = commissionableAmount * commissionRate;
+  const hasMaterials = materialCost > 0;
 
   const handleSubmit = (data: InsertJob) => {
     data.weekOf = getMondayOf(data.jobDate);
-    data.commissionEarned = parseFloat((data.invoiceTotal * data.commissionRate).toFixed(2));
+    data.materialMarkupAmount = parseFloat((data.materialCost * data.materialMarkupRate).toFixed(2));
+    data.commissionableAmount = parseFloat((Math.max(0, data.invoiceTotal - data.materialMarkupAmount)).toFixed(2));
+    data.commissionEarned = parseFloat((data.commissionableAmount * data.commissionRate).toFixed(2));
     onSubmit(data);
   };
 
@@ -91,52 +89,32 @@ function JobForm({
     <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label htmlFor="jobNumber">Job / Invoice #</Label>
-          <Input id="jobNumber" data-testid="input-job-number" {...form.register("jobNumber")} placeholder="e.g. ST-10045" />
-          {form.formState.errors.jobNumber && (
-            <p className="text-xs text-destructive">{form.formState.errors.jobNumber.message}</p>
-          )}
+          <Label>Job / Invoice #</Label>
+          <Input data-testid="input-job-number" {...form.register("jobNumber")} placeholder="e.g. ST-10045" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="jobDate">Job Date</Label>
-          <Input id="jobDate" data-testid="input-job-date" type="date" {...form.register("jobDate")} />
+          <Label>Job Date</Label>
+          <Input data-testid="input-job-date" type="date" {...form.register("jobDate")} />
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="customerName">Customer Name</Label>
-        <Input id="customerName" data-testid="input-customer-name" {...form.register("customerName")} placeholder="e.g. John Smith" />
-        {form.formState.errors.customerName && (
-          <p className="text-xs text-destructive">{form.formState.errors.customerName.message}</p>
-        )}
+        <Label>Customer Name</Label>
+        <Input data-testid="input-customer-name" {...form.register("customerName")} placeholder="e.g. John Smith" />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Service Type</Label>
-          <Select
-            defaultValue={defaultValues?.serviceType || "Plumbing"}
-            onValueChange={(v) => form.setValue("serviceType", v)}
-          >
-            <SelectTrigger data-testid="select-service-type">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SERVICE_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>{t}</SelectItem>
-              ))}
-            </SelectContent>
+          <Select defaultValue={defaultValues?.serviceType || "Plumbing"} onValueChange={(v) => form.setValue("serviceType", v)}>
+            <SelectTrigger data-testid="select-service-type"><SelectValue /></SelectTrigger>
+            <SelectContent>{SERVICE_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
           <Label>Status</Label>
-          <Select
-            defaultValue={defaultValues?.status || "completed"}
-            onValueChange={(v) => form.setValue("status", v)}
-          >
-            <SelectTrigger data-testid="select-status">
-              <SelectValue />
-            </SelectTrigger>
+          <Select defaultValue={defaultValues?.status || "completed"} onValueChange={(v) => form.setValue("status", v)}>
+            <SelectTrigger data-testid="select-status"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
@@ -146,49 +124,81 @@ function JobForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="invoiceTotal">Invoice Total ($)</Label>
-          <Input
-            id="invoiceTotal"
-            data-testid="input-invoice-total"
-            type="number"
-            step="0.01"
-            min="0"
-            {...form.register("invoiceTotal", { valueAsNumber: true })}
-            placeholder="0.00"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="commissionRate">Commission Rate</Label>
-          <Select
-            defaultValue={String(defaultValues?.commissionRate || 0.25)}
-            onValueChange={(v) => form.setValue("commissionRate", parseFloat(v))}
-          >
-            <SelectTrigger data-testid="select-commission-rate">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="0.20">20%</SelectItem>
-              <SelectItem value="0.25">25%</SelectItem>
-              <SelectItem value="0.30">30%</SelectItem>
-              <SelectItem value="0.35">35%</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="space-y-1.5">
+        <Label>Invoice Total ($)</Label>
+        <Input data-testid="input-invoice-total" type="number" step="0.01" min="0" {...form.register("invoiceTotal", { valueAsNumber: true })} placeholder="0.00" />
       </div>
 
-      {/* Live commission preview */}
-      <div className="rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-4 py-3">
-        <div className="text-xs text-green-700 dark:text-green-400 font-medium">Commission You Should Earn</div>
-        <div className="text-lg font-bold text-green-700 dark:text-green-300 tabular-nums mt-0.5">
-          {fmt(estimatedCommission)}
+      {/* Materials section */}
+      <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <HardHat size={14} />
+          Material Costs
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Material Cost ($)</Label>
+            <Input data-testid="input-material-cost" type="number" step="0.01" min="0" {...form.register("materialCost", { valueAsNumber: true })} placeholder="0.00" />
+            <p className="text-xs text-muted-foreground">What materials actually cost</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Company Markup</Label>
+            <Select defaultValue={String(defaultValues?.materialMarkupRate ?? 0.30)} onValueChange={(v) => form.setValue("materialMarkupRate", parseFloat(v))}>
+              <SelectTrigger data-testid="select-markup-rate"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0.20">20%</SelectItem>
+                <SelectItem value="0.25">25%</SelectItem>
+                <SelectItem value="0.30">30% (default)</SelectItem>
+                <SelectItem value="0.35">35%</SelectItem>
+                <SelectItem value="0.40">40%</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Markup added to invoice</p>
+          </div>
+        </div>
+
+        {hasMaterials && (
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            <div className="rounded-md bg-background border border-border px-2 py-2">
+              <div className="text-xs text-muted-foreground">Markup $</div>
+              <div className="text-sm font-semibold text-orange-600 dark:text-orange-400 tabular-nums">{fmt(materialMarkupAmount)}</div>
+            </div>
+            <div className="rounded-md bg-background border border-border px-2 py-2">
+              <div className="text-xs text-muted-foreground">Commissionable</div>
+              <div className="text-sm font-semibold tabular-nums">{fmt(commissionableAmount)}</div>
+            </div>
+            <div className="rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-2 py-2">
+              <div className="text-xs text-muted-foreground">Your Commission</div>
+              <div className="text-sm font-bold text-green-700 dark:text-green-400 tabular-nums">{fmt(commissionEarned)}</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Commission preview when no materials */}
+      {!hasMaterials && (
+        <div className="rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-4 py-3">
+          <div className="text-xs text-green-700 dark:text-green-400 font-medium">Commission You Should Earn</div>
+          <div className="text-lg font-bold text-green-700 dark:text-green-300 tabular-nums mt-0.5">{fmt(commissionEarned)}</div>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <Label>Commission Rate</Label>
+        <Select defaultValue={String(defaultValues?.commissionRate || 0.25)} onValueChange={(v) => form.setValue("commissionRate", parseFloat(v))}>
+          <SelectTrigger data-testid="select-commission-rate"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0.20">20%</SelectItem>
+            <SelectItem value="0.25">25%</SelectItem>
+            <SelectItem value="0.30">30%</SelectItem>
+            <SelectItem value="0.35">35%</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="notes">Notes (optional)</Label>
-        <Textarea id="notes" data-testid="input-notes" {...form.register("notes")} placeholder="Any discrepancies, customer notes..." rows={2} />
+        <Label>Notes (optional)</Label>
+        <Textarea data-testid="input-notes" {...form.register("notes")} placeholder="Any discrepancies, customer notes..." rows={2} />
       </div>
 
       <Button type="submit" className="w-full" disabled={isPending} data-testid="button-submit-job">
@@ -236,7 +246,7 @@ export default function Jobs() {
   });
 
   return (
-    <div className="space-y-5 max-w-4xl">
+    <div className="space-y-5 max-w-5xl">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Jobs</h1>
@@ -244,40 +254,26 @@ export default function Jobs() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" data-testid="button-add-job">
-              <Plus size={15} className="mr-1.5" />
-              Add Job
-            </Button>
+            <Button size="sm" data-testid="button-add-job"><Plus size={15} className="mr-1.5" />Add Job</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Log a New Job</DialogTitle>
-            </DialogHeader>
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle>Log a New Job</DialogTitle></DialogHeader>
             <JobForm onSubmit={(d) => createMutation.mutate(d)} isPending={createMutation.isPending} />
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Edit dialog */}
       <Dialog open={!!editJob} onOpenChange={(o) => !o && setEditJob(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Job</DialogTitle>
-          </DialogHeader>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit Job</DialogTitle></DialogHeader>
           {editJob && (
-            <JobForm
-              defaultValues={editJob}
-              onSubmit={(d) => updateMutation.mutate({ id: editJob.id, data: d })}
-              isPending={updateMutation.isPending}
-            />
+            <JobForm defaultValues={editJob} onSubmit={(d) => updateMutation.mutate({ id: editJob.id, data: d })} isPending={updateMutation.isPending} />
           )}
         </DialogContent>
       </Dialog>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
-        </div>
+        <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>
       ) : jobs.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="p-10 text-center text-muted-foreground">
@@ -293,11 +289,11 @@ export default function Jobs() {
               <tr className="bg-muted/40 border-b border-border">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Job #</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Service</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Date</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Invoice</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Mat. Markup</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Commission</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Status</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -306,31 +302,19 @@ export default function Jobs() {
                 <tr key={job.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors" data-testid={`row-job-${job.id}`}>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{job.jobNumber}</td>
                   <td className="px-4 py-3 font-medium">{job.customerName}</td>
-                  <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{job.serviceType}</td>
                   <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">{new Date(job.jobDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{fmt(job.invoiceTotal)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-orange-600 dark:text-orange-400 hidden md:table-cell">
+                    {job.materialMarkupAmount > 0 ? `-${fmt(job.materialMarkupAmount)}` : "—"}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums text-green-600 dark:text-green-400 font-medium">{fmt(job.commissionEarned)}</td>
-                  <td className="px-4 py-3">
-                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", `status-${job.status}`)}>
-                      {job.status}
-                    </span>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", `status-${job.status}`)}>{job.status}</span>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
-                      <button
-                        data-testid={`button-edit-job-${job.id}`}
-                        onClick={() => setEditJob(job)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        data-testid={`button-delete-job-${job.id}`}
-                        onClick={() => deleteMutation.mutate(job.id)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      <button data-testid={`button-edit-job-${job.id}`} onClick={() => setEditJob(job)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><Pencil size={13} /></button>
+                      <button data-testid={`button-delete-job-${job.id}`} onClick={() => deleteMutation.mutate(job.id)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><Trash2 size={13} /></button>
                     </div>
                   </td>
                 </tr>
