@@ -316,7 +316,6 @@ export default function Jobs() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/summary"] });
       setOpen(false);
-      toast({ title: "Job added", description: "Commission tracked successfully." });
     },
   });
 
@@ -327,7 +326,6 @@ export default function Jobs() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/summary"] });
       setEditJob(null);
-      toast({ title: "Job updated" });
     },
   });
 
@@ -337,7 +335,6 @@ export default function Jobs() {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/summary"] });
       setDeleteJob(null);
-      toast({ title: "Job deleted" });
     },
   });
 
