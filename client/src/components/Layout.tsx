@@ -127,7 +127,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Mobile bottom tab bar ────────────────────────────────── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-t border-border"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <div className="flex items-stretch">
+        <div className="flex items-stretch justify-center">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = href === "/" ? location === "/" : location.startsWith(href);
             return (
