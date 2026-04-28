@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertJobSchema, type Job, type InsertJob } from "@shared/schema";
 import { z } from "zod";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -278,9 +278,34 @@ function JobCard({ job, onEdit, onDelete }: { job: Job; onEdit: () => void; onDe
   );
 }
 
+function ConfirmDeleteDialog({ open, onConfirm, onCancel, label }: {
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  label: string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Delete this job?</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground pt-1">
+            <span className="font-medium text-foreground">{label}</span> will be permanently removed. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex gap-2 pt-2">
+          <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
+          <Button variant="destructive" className="flex-1" onClick={onConfirm}>Yes, Delete</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Jobs() {
   const [open, setOpen] = useState(false);
   const [editJob, setEditJob] = useState<Job | null>(null);
+  const [deleteJob, setDeleteJob] = useState<Job | null>(null);
   const { toast } = useToast();
 
   const { data: jobs = [], isLoading } = useQuery<Job[]>({ queryKey: ["/api/jobs"] });
@@ -311,6 +336,7 @@ export default function Jobs() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/summary"] });
+      setDeleteJob(null);
       toast({ title: "Job deleted" });
     },
   });
@@ -334,6 +360,13 @@ export default function Jobs() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deleteJob}
+        label={deleteJob ? `${deleteJob.customerName} — ${deleteJob.jobNumber}` : ""}
+        onConfirm={() => deleteJob && deleteMutation.mutate(deleteJob.id)}
+        onCancel={() => setDeleteJob(null)}
+      />
 
       <Dialog open={!!editJob} onOpenChange={(o) => !o && setEditJob(null)}>
         <DialogContent className="max-w-md max-h-[92dvh] overflow-y-auto">
@@ -363,7 +396,7 @@ export default function Jobs() {
                 key={job.id}
                 job={job}
                 onEdit={() => setEditJob(job)}
-                onDelete={() => deleteMutation.mutate(job.id)}
+                onDelete={() => setDeleteJob(job)}
               />
             ))}
           </div>
@@ -400,7 +433,7 @@ export default function Jobs() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button data-testid={`button-edit-job-${job.id}`} onClick={() => setEditJob(job)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><Pencil size={13} /></button>
-                        <button data-testid={`button-delete-job-${job.id}`} onClick={() => deleteMutation.mutate(job.id)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><Trash2 size={13} /></button>
+                        <button data-testid={`button-delete-job-${job.id}`} onClick={() => setDeleteJob(job)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><Trash2 size={13} /></button>
                       </div>
                     </td>
                   </tr>

@@ -11,6 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,9 +105,34 @@ function PaymentForm({
   );
 }
 
+function ConfirmDeleteDialog({ open, onConfirm, onCancel, label }: {
+  open: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  label: string;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Delete this payment?</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground pt-1">
+            <span className="font-medium text-foreground">{label}</span> will be permanently removed. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="flex gap-2 pt-2">
+          <Button variant="outline" className="flex-1" onClick={onCancel}>Cancel</Button>
+          <Button variant="destructive" className="flex-1" onClick={onConfirm}>Yes, Delete</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Payments() {
   const [open, setOpen] = useState(false);
   const [editPayment, setEditPayment] = useState<Payment | null>(null);
+  const [deletePayment, setDeletePayment] = useState<Payment | null>(null);
   const { toast } = useToast();
 
   const { data: payments = [], isLoading } = useQuery<Payment[]>({ queryKey: ["/api/payments"] });
@@ -136,6 +163,7 @@ export default function Payments() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/summary"] });
+      setDeletePayment(null);
       toast({ title: "Payment deleted" });
     },
   });
@@ -166,6 +194,13 @@ export default function Payments() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <ConfirmDeleteDialog
+        open={!!deletePayment}
+        label={deletePayment ? `${fmt(deletePayment.amountPaid)} on ${fmtDate(deletePayment.payDate)}` : ""}
+        onConfirm={() => deletePayment && deleteMutation.mutate(deletePayment.id)}
+        onCancel={() => setDeletePayment(null)}
+      />
 
       <Dialog open={!!editPayment} onOpenChange={(o) => !o && setEditPayment(null)}>
         <DialogContent className="max-w-sm max-h-[92dvh] overflow-y-auto">
@@ -221,7 +256,7 @@ export default function Payments() {
                     </button>
                     <button
                       data-testid={`button-delete-payment-${p.id}`}
-                      onClick={() => deleteMutation.mutate(p.id)}
+                      onClick={() => setDeletePayment(p)}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors font-medium"
                     >
                       <Trash2 size={14} />Delete
@@ -262,7 +297,7 @@ export default function Payments() {
                         </button>
                         <button
                           data-testid={`button-delete-payment-${p.id}`}
-                          onClick={() => deleteMutation.mutate(p.id)}
+                          onClick={() => setDeletePayment(p)}
                           className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                         >
                           <Trash2 size={13} />
