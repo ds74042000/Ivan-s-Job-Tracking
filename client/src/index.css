@@ -43,7 +43,7 @@
     --input: 220 14% 88%;
     --ring: 214 80% 38%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;
 
     --font-body: 'DM Sans', system-ui, sans-serif;
     --font-mono: 'DM Mono', 'Courier New', monospace;
@@ -97,6 +97,10 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     scroll-behavior: smooth;
+    /* Prevent tap highlight flash on iOS */
+    -webkit-tap-highlight-color: transparent;
+    /* Prevent text size bump on orientation change */
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
@@ -104,11 +108,34 @@
     font-family: var(--font-body);
     min-height: 100dvh;
     line-height: 1.55;
+    /* Prevent overscroll rubber-band effect from looking weird */
+    overscroll-behavior-y: none;
   }
 
   h1, h2, h3, h4, h5, h6 {
     text-wrap: balance;
     line-height: 1.2;
+  }
+
+  /* Make ALL inputs/buttons comfortably tappable on mobile */
+  input, select, textarea, button {
+    font-size: 16px; /* prevents iOS zoom on focus */
+    font-family: var(--font-body);
+  }
+
+  /* Increase native input height on mobile so they're thumb-friendly */
+  @media (max-width: 767px) {
+    input[type="text"],
+    input[type="number"],
+    input[type="date"],
+    input[type="email"],
+    input[type="password"],
+    select,
+    textarea {
+      min-height: 48px;
+      padding-top: 0.625rem;
+      padding-bottom: 0.625rem;
+    }
   }
 }
 
@@ -135,4 +162,24 @@
 }
 .delta-negative {
   @apply text-red-600 dark:text-red-400;
+}
+
+/* App-feel: smooth press feedback on interactive elements */
+@media (max-width: 767px) {
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+/* Dialog / sheet sizing on mobile */
+@media (max-width: 767px) {
+  [data-radix-dialog-content] {
+    max-height: 92dvh !important;
+  }
+}
+
+/* Pull-to-refresh overscroll prevention on main content */
+.no-overscroll {
+  overscroll-behavior: none;
 }

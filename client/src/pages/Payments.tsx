@@ -37,6 +37,10 @@ function getMondayOf(dateStr: string): string {
   return d.toISOString().split("T")[0];
 }
 
+function fmtDate(dateStr: string) {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function PaymentForm({
   defaultValues,
   onSubmit,
@@ -92,7 +96,7 @@ function PaymentForm({
         <Textarea id="payNotes" data-testid="input-pay-notes" {...form.register("notes")} placeholder="Check number, direct deposit reference..." rows={2} />
       </div>
 
-      <Button type="submit" className="w-full" disabled={isPending} data-testid="button-submit-payment">
+      <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={isPending} data-testid="button-submit-payment">
         {isPending ? "Saving..." : "Save Payment"}
       </Button>
     </form>
@@ -143,16 +147,18 @@ export default function Payments() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Payments</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Total received: <span className="tabular-nums font-semibold text-foreground">{fmt(totalPaid)}</span></p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Total received: <span className="tabular-nums font-semibold text-foreground">{fmt(totalPaid)}</span>
+          </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" data-testid="button-add-payment">
-              <Plus size={15} className="mr-1.5" />
+            <Button size="sm" className="h-10 px-4 text-sm font-semibold" data-testid="button-add-payment">
+              <Plus size={16} className="mr-1.5" />
               Log Payment
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="max-w-sm max-h-[92dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Log a Payment Received</DialogTitle>
             </DialogHeader>
@@ -162,7 +168,7 @@ export default function Payments() {
       </div>
 
       <Dialog open={!!editPayment} onOpenChange={(o) => !o && setEditPayment(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-sm max-h-[92dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Payment</DialogTitle>
           </DialogHeader>
@@ -177,7 +183,7 @@ export default function Payments() {
       </Dialog>
 
       {isLoading ? (
-        <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}</div>
+        <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>
       ) : payments.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="p-10 text-center text-muted-foreground">
@@ -187,51 +193,88 @@ export default function Payments() {
           </CardContent>
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/40 border-b border-border">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pay Date</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Week Of</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amount Paid</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Notes</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {payments.map((p) => (
-                <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors" data-testid={`row-payment-${p.id}`}>
-                  <td className="px-4 py-3 font-medium">
-                    {new Date(p.payDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    Wk of {new Date(p.weekOf + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-purple-600 dark:text-purple-400">{fmt(p.amountPaid)}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs hidden md:table-cell">{p.notes || "—"}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button
-                        data-testid={`button-edit-payment-${p.id}`}
-                        onClick={() => setEditPayment(p)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        data-testid={`button-delete-payment-${p.id}`}
-                        onClick={() => deleteMutation.mutate(p.id)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+        <>
+          {/* Mobile: cards */}
+          <div className="md:hidden space-y-3">
+            {payments.map((p) => (
+              <Card key={p.id} className="border-border" data-testid={`row-payment-${p.id}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-semibold text-sm">{fmtDate(p.payDate)}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Wk of {fmtDate(p.weekOf)}
+                      </div>
+                      {p.notes && <div className="text-xs text-muted-foreground mt-0.5 truncate max-w-[180px]">{p.notes}</div>}
                     </div>
-                  </td>
+                    <div className="text-right">
+                      <div className="tabular-nums font-bold text-lg text-purple-600 dark:text-purple-400">{fmt(p.amountPaid)}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 pt-3 border-t border-border">
+                    <button
+                      data-testid={`button-edit-payment-${p.id}`}
+                      onClick={() => setEditPayment(p)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors font-medium"
+                    >
+                      <Pencil size={14} />Edit
+                    </button>
+                    <button
+                      data-testid={`button-delete-payment-${p.id}`}
+                      onClick={() => deleteMutation.mutate(p.id)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors font-medium"
+                    >
+                      <Trash2 size={14} />Delete
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Desktop: table */}
+          <div className="hidden md:block overflow-x-auto rounded-xl border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40 border-b border-border">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pay Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Week Of</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amount Paid</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</th>
+                  <th className="px-4 py-3"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {payments.map((p) => (
+                  <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors" data-testid={`row-payment-${p.id}`}>
+                    <td className="px-4 py-3 font-medium">{fmtDate(p.payDate)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">Wk of {fmtDate(p.weekOf)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums font-semibold text-purple-600 dark:text-purple-400">{fmt(p.amountPaid)}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">{p.notes || "—"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <button
+                          data-testid={`button-edit-payment-${p.id}`}
+                          onClick={() => setEditPayment(p)}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          data-testid={`button-delete-payment-${p.id}`}
+                          onClick={() => deleteMutation.mutate(p.id)}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
