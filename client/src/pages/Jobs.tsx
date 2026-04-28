@@ -88,8 +88,10 @@ function JobForm({ defaultValues, onSubmit, isPending }: {
 
   // Company charges cost + markup %, full amount deducted from commissionable base
   const materialMarkupAmount = materialCost * (1 + materialMarkupRate);
+  const materialProfit = materialMarkupAmount - materialCost; // what company pockets on markup
   const commissionableAmount = Math.max(0, invoiceTotal - materialMarkupAmount);
   const commissionEarned = commissionableAmount * commissionRate;
+  const companyTake = commissionableAmount * (1 - commissionRate); // company's cut of commissionable
   const hasMaterials = materialCost > 0;
 
   const handleSubmit = (data: InsertJob) => {
@@ -173,23 +175,47 @@ function JobForm({ defaultValues, onSubmit, isPending }: {
         </div>
 
         {hasMaterials && (
-          <div className="space-y-1.5 pt-1">
+          <div className="space-y-2 pt-1">
+            {/* Deduction formula */}
             <div className="rounded-lg bg-background border border-border px-3 py-2 text-xs text-muted-foreground">
               <span className="font-mono">{fmt(materialCost)}</span>
               <span className="mx-1">×</span>
               <span className="font-mono">{(1 + materialMarkupRate).toFixed(2)}</span>
               <span className="mx-1">=</span>
               <span className="font-semibold text-orange-600 dark:text-orange-400">{fmt(materialMarkupAmount)}</span>
-              <span className="ml-1">deducted</span>
+              <span className="ml-1">deducted from invoice</span>
             </div>
+
+            {/* Commissionable + your cut */}
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-lg bg-background border border-border px-3 py-2">
                 <div className="text-xs text-muted-foreground">Commissionable base</div>
                 <div className="text-sm font-semibold tabular-nums mt-0.5">{fmt(commissionableAmount)}</div>
               </div>
               <div className="rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-3 py-2">
-                <div className="text-xs text-muted-foreground">Your Commission</div>
+                <div className="text-xs text-muted-foreground">Your commission</div>
                 <div className="text-sm font-bold text-green-700 dark:text-green-400 tabular-nums mt-0.5">{fmt(commissionEarned)}</div>
+              </div>
+            </div>
+
+            {/* Who gets what */}
+            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 space-y-1.5">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Profit breakdown</div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Your commission</span>
+                <span className="tabular-nums font-semibold text-green-600 dark:text-green-400">{fmt(commissionEarned)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Company (labor cut)</span>
+                <span className="tabular-nums font-medium text-foreground">{fmt(companyTake)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-muted-foreground">Company (material markup profit)</span>
+                <span className="tabular-nums font-medium text-orange-600 dark:text-orange-400">{fmt(materialProfit)}</span>
+              </div>
+              <div className="border-t border-border pt-1.5 flex justify-between items-center text-xs">
+                <span className="font-semibold text-muted-foreground">Total company takes</span>
+                <span className="tabular-nums font-bold text-foreground">{fmt(companyTake + materialProfit)}</span>
               </div>
             </div>
           </div>
@@ -263,10 +289,36 @@ function JobCard({ job, onEdit, onDelete }: { job: Job; onEdit: () => void; onDe
             </div>
           )}
           <div className={hasMaterials ? "" : "col-span-2"}>
-            <div className="text-xs text-muted-foreground">Commission</div>
+            <div className="text-xs text-muted-foreground">Your Commission</div>
             <div className="tabular-nums font-bold text-sm text-green-600 dark:text-green-400">{fmt(job.commissionEarned)}</div>
           </div>
         </div>
+
+        {hasMaterials && (() => {
+          const matProfit = job.materialMarkupAmount - job.materialCost;
+          const companyLabor = job.commissionableAmount * (1 - job.commissionRate);
+          return (
+            <div className="mt-2 rounded-lg border border-border bg-muted/20 px-3 py-2 space-y-1">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Profit Breakdown</div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Your commission</span>
+                <span className="tabular-nums font-semibold text-green-600 dark:text-green-400">{fmt(job.commissionEarned)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Company labor cut</span>
+                <span className="tabular-nums font-medium">{fmt(companyLabor)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Company markup profit</span>
+                <span className="tabular-nums font-medium text-orange-600 dark:text-orange-400">{fmt(matProfit)}</span>
+              </div>
+              <div className="flex justify-between text-xs border-t border-border pt-1">
+                <span className="font-semibold text-muted-foreground">Company total</span>
+                <span className="tabular-nums font-bold">{fmt(companyLabor + matProfit)}</span>
+              </div>
+            </div>
+          );
+        })()}
 
         <div className="mt-3 flex items-center gap-2 pt-3 border-t border-border">
           <button
