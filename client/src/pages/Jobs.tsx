@@ -30,6 +30,14 @@ function fmt(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
+function todayLocal(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function getMondayOf(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   const day = d.getDay();
@@ -55,7 +63,7 @@ function JobForm({ defaultValues, onSubmit, isPending }: {
       jobNumber: "",
       customerName: "",
       serviceType: "Plumbing",
-      jobDate: new Date().toISOString().split("T")[0],
+      jobDate: todayLocal(),
       invoiceTotal: 0,
       materialCost: 0,
       materialMarkupRate: 0.30,
@@ -65,7 +73,7 @@ function JobForm({ defaultValues, onSubmit, isPending }: {
       commissionEarned: 0,
       status: "completed",
       notes: "",
-      weekOf: getMondayOf(new Date().toISOString().split("T")[0]),
+      weekOf: getMondayOf(todayLocal()),
       ...defaultValues,
     },
   });
