@@ -3,6 +3,7 @@ import express, { Response, NextFunction } from 'express';
 import type { Request } from 'express';
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
+import { sheetsRestoreToDb } from "./sheets";
 import { createServer } from "node:http";
 
 const app = express();
@@ -62,6 +63,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Restore data from Google Sheets on every startup (Render free tier wipes disk)
+  sheetsRestoreToDb();
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

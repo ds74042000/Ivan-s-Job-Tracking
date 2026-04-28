@@ -3,7 +3,7 @@ import Database from "better-sqlite3";
 import { eq, desc } from "drizzle-orm";
 import { jobs, payments, type Job, type InsertJob, type Payment, type InsertPayment } from "@shared/schema";
 
-const sqlite = new Database("data.db");
+export const sqlite = new Database("data.db");
 export const db = drizzle(sqlite);
 
 sqlite.exec(`
