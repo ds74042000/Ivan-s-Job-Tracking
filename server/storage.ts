@@ -1,91 +1,182 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
-import { eq, desc } from "drizzle-orm";
-import { jobs, payments, type Job, type InsertJob, type Payment, type InsertPayment } from "@shared/schema";
+import supabase from "./supabase";
+import type { Job, InsertJob, Payment, InsertPayment } from "@shared/schema";
 
-export const sqlite = new Database("data.db");
-export const db = drizzle(sqlite);
+// ── Type helpers ──────────────────────────────────────────────────────────────
 
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS jobs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    job_number TEXT NOT NULL,
-    customer_name TEXT NOT NULL,
-    service_type TEXT NOT NULL,
-    job_date TEXT NOT NULL,
-    invoice_total REAL NOT NULL DEFAULT 0,
-    material_cost REAL NOT NULL DEFAULT 0,
-    material_markup_rate REAL NOT NULL DEFAULT 0.30,
-    material_markup_amount REAL NOT NULL DEFAULT 0,
-    commissionable_amount REAL NOT NULL DEFAULT 0,
-    commission_rate REAL NOT NULL DEFAULT 0.25,
-    commission_earned REAL NOT NULL DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'completed',
-    notes TEXT DEFAULT '',
-    week_of TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS payments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    week_of TEXT NOT NULL,
-    amount_paid REAL NOT NULL DEFAULT 0,
-    pay_date TEXT NOT NULL,
-    notes TEXT DEFAULT ''
-  );
-`);
-
-// Add new columns to existing tables if they don't exist (migration)
-try { sqlite.exec(`ALTER TABLE jobs ADD COLUMN material_cost REAL NOT NULL DEFAULT 0`); } catch {}
-try { sqlite.exec(`ALTER TABLE jobs ADD COLUMN material_markup_rate REAL NOT NULL DEFAULT 0.30`); } catch {}
-try { sqlite.exec(`ALTER TABLE jobs ADD COLUMN material_markup_amount REAL NOT NULL DEFAULT 0`); } catch {}
-try { sqlite.exec(`ALTER TABLE jobs ADD COLUMN commissionable_amount REAL NOT NULL DEFAULT 0`); } catch {}
-
-export interface IStorage {
-  getAllJobs(): Job[];
-  getJobById(id: number): Job | undefined;
-  createJob(job: InsertJob): Job;
-  updateJob(id: number, job: Partial<InsertJob>): Job | undefined;
-  deleteJob(id: number): void;
-  getJobsByWeek(weekOf: string): Job[];
-  getAllPayments(): Payment[];
-  getPaymentById(id: number): Payment | undefined;
-  createPayment(payment: InsertPayment): Payment;
-  updatePayment(id: number, payment: Partial<InsertPayment>): Payment | undefined;
-  deletePayment(id: number): void;
+function toJob(row: any): Job {
+  return {
+    id: row.id,
+    jobNumber: row.job_number,
+    customerName: row.customer_name,
+    serviceType: row.service_type,
+    jobDate: row.job_date,
+    weekOf: row.week_of,
+    invoiceTotal: Number(row.invoice_total),
+    materialCost: Number(row.material_cost),
+    materialMarkupRate: Number(row.material_markup_rate),
+    materialMarkupAmount: Number(row.material_markup_amount),
+    commissionableAmount: Number(row.commissionable_amount),
+    commissionRate: Number(row.commission_rate),
+    commissionEarned: Number(row.commission_earned),
+    status: row.status,
+    notes: row.notes ?? "",
+  };
 }
 
-export class Storage implements IStorage {
-  getAllJobs(): Job[] {
-    return db.select().from(jobs).orderBy(desc(jobs.jobDate)).all();
+function toPayment(row: any): Payment {
+  return {
+    id: row.id,
+    weekOf: row.week_of,
+    amountPaid: Number(row.amount_paid),
+    payDate: row.pay_date,
+    notes: row.notes ?? "",
+  };
+}
+
+// ── Storage class ─────────────────────────────────────────────────────────────
+
+export class Storage {
+  // ── Jobs ──
+
+  async getAllJobs(): Promise<Job[]> {
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("*")
+      .order("job_date", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(toJob);
   }
-  getJobById(id: number): Job | undefined {
-    return db.select().from(jobs).where(eq(jobs.id, id)).get();
+
+  async getJobById(id: number): Promise<Job | undefined> {
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (error) return undefined;
+    return toJob(data);
   }
-  createJob(job: InsertJob): Job {
-    return db.insert(jobs).values(job).returning().get();
+
+  async createJob(job: InsertJob): Promise<Job> {
+    const { data, error } = await supabase
+      .from("jobs")
+      .insert({
+        job_number: job.jobNumber,
+        customer_name: job.customerName,
+        service_type: job.serviceType,
+        job_date: job.jobDate,
+        week_of: job.weekOf,
+        invoice_total: job.invoiceTotal,
+        material_cost: job.materialCost,
+        material_markup_rate: job.materialMarkupRate,
+        material_markup_amount: job.materialMarkupAmount,
+        commissionable_amount: job.commissionableAmount,
+        commission_rate: job.commissionRate,
+        commission_earned: job.commissionEarned,
+        status: job.status,
+        notes: job.notes ?? "",
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return toJob(data);
   }
-  updateJob(id: number, data: Partial<InsertJob>): Job | undefined {
-    return db.update(jobs).set(data).where(eq(jobs.id, id)).returning().get();
+
+  async updateJob(id: number, job: Partial<InsertJob>): Promise<Job | undefined> {
+    const update: any = {};
+    if (job.jobNumber !== undefined) update.job_number = job.jobNumber;
+    if (job.customerName !== undefined) update.customer_name = job.customerName;
+    if (job.serviceType !== undefined) update.service_type = job.serviceType;
+    if (job.jobDate !== undefined) update.job_date = job.jobDate;
+    if (job.weekOf !== undefined) update.week_of = job.weekOf;
+    if (job.invoiceTotal !== undefined) update.invoice_total = job.invoiceTotal;
+    if (job.materialCost !== undefined) update.material_cost = job.materialCost;
+    if (job.materialMarkupRate !== undefined) update.material_markup_rate = job.materialMarkupRate;
+    if (job.materialMarkupAmount !== undefined) update.material_markup_amount = job.materialMarkupAmount;
+    if (job.commissionableAmount !== undefined) update.commissionable_amount = job.commissionableAmount;
+    if (job.commissionRate !== undefined) update.commission_rate = job.commissionRate;
+    if (job.commissionEarned !== undefined) update.commission_earned = job.commissionEarned;
+    if (job.status !== undefined) update.status = job.status;
+    if (job.notes !== undefined) update.notes = job.notes;
+
+    const { data, error } = await supabase
+      .from("jobs")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) return undefined;
+    return toJob(data);
   }
-  deleteJob(id: number): void {
-    db.delete(jobs).where(eq(jobs.id, id)).run();
+
+  async deleteJob(id: number): Promise<void> {
+    await supabase.from("jobs").delete().eq("id", id);
   }
-  getJobsByWeek(weekOf: string): Job[] {
-    return db.select().from(jobs).where(eq(jobs.weekOf, weekOf)).all();
+
+  async getJobsByWeek(weekOf: string): Promise<Job[]> {
+    const { data, error } = await supabase
+      .from("jobs")
+      .select("*")
+      .eq("week_of", weekOf);
+    if (error) throw error;
+    return (data ?? []).map(toJob);
   }
-  getAllPayments(): Payment[] {
-    return db.select().from(payments).orderBy(desc(payments.weekOf)).all();
+
+  // ── Payments ──
+
+  async getAllPayments(): Promise<Payment[]> {
+    const { data, error } = await supabase
+      .from("payments")
+      .select("*")
+      .order("week_of", { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map(toPayment);
   }
-  getPaymentById(id: number): Payment | undefined {
-    return db.select().from(payments).where(eq(payments.id, id)).get();
+
+  async getPaymentById(id: number): Promise<Payment | undefined> {
+    const { data, error } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("id", id)
+      .single();
+    if (error) return undefined;
+    return toPayment(data);
   }
-  createPayment(payment: InsertPayment): Payment {
-    return db.insert(payments).values(payment).returning().get();
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const { data, error } = await supabase
+      .from("payments")
+      .insert({
+        week_of: payment.weekOf,
+        amount_paid: payment.amountPaid,
+        pay_date: payment.payDate,
+        notes: payment.notes ?? "",
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return toPayment(data);
   }
-  updatePayment(id: number, data: Partial<InsertPayment>): Payment | undefined {
-    return db.update(payments).set(data).where(eq(payments.id, id)).returning().get();
+
+  async updatePayment(id: number, payment: Partial<InsertPayment>): Promise<Payment | undefined> {
+    const update: any = {};
+    if (payment.weekOf !== undefined) update.week_of = payment.weekOf;
+    if (payment.amountPaid !== undefined) update.amount_paid = payment.amountPaid;
+    if (payment.payDate !== undefined) update.pay_date = payment.payDate;
+    if (payment.notes !== undefined) update.notes = payment.notes;
+
+    const { data, error } = await supabase
+      .from("payments")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) return undefined;
+    return toPayment(data);
   }
-  deletePayment(id: number): void {
-    db.delete(payments).where(eq(payments.id, id)).run();
+
+  async deletePayment(id: number): Promise<void> {
+    await supabase.from("payments").delete().eq("id", id);
   }
 }
 
