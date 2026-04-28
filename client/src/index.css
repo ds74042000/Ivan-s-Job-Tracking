@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Background — dark slate tones (field work, blue-collar feel) */
+    --background: 220 20% 97%;
+    --foreground: 220 25% 10%;
+
+    --card: 220 18% 99%;
+    --card-foreground: 220 25% 10%;
+
+    --popover: 220 18% 99%;
+    --popover-foreground: 220 25% 10%;
+
+    /* Primary — strong blue accent */
+    --primary: 214 80% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 220 20% 30%;
+
+    --muted: 220 12% 94%;
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 214 60% 92%;
+    --accent-foreground: 214 80% 30%;
+
+    /* Destructive */
+    --destructive: 0 75% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Success */
+    --success: 142 60% 32%;
+    --success-foreground: 0 0% 100%;
+
+    /* Warning */
+    --warning: 30 90% 42%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 14% 88%;
+    --input: 220 14% 88%;
+    --ring: 214 80% 38%;
+
+    --radius: 0.5rem;
+
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'DM Mono', 'Courier New', monospace;
+  }
+
+  .dark {
+    --background: 222 28% 8%;
+    --foreground: 220 15% 88%;
+
+    --card: 222 26% 11%;
+    --card-foreground: 220 15% 88%;
+
+    --popover: 222 26% 11%;
+    --popover-foreground: 220 15% 88%;
+
+    --primary: 214 75% 58%;
+    --primary-foreground: 220 30% 8%;
+
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 220 12% 75%;
+
+    --muted: 222 20% 14%;
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 214 40% 20%;
+    --accent-foreground: 214 75% 70%;
+
+    --destructive: 0 65% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 55% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 30 85% 55%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 222 20% 18%;
+    --input: 222 20% 18%;
+    --ring: 214 75% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    min-height: 100dvh;
+    line-height: 1.55;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    text-wrap: balance;
+    line-height: 1.2;
+  }
+}
+
+/* Mono number display */
+.tabular-nums {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status badges */
+.status-completed {
+  @apply bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400;
+}
+.status-pending {
+  @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400;
+}
+.status-disputed {
+  @apply bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400;
+}
+
+/* Delta positive/negative */
+.delta-positive {
+  @apply text-green-600 dark:text-green-400;
+}
+.delta-negative {
+  @apply text-red-600 dark:text-red-400;
+}
